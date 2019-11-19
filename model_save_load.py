@@ -89,6 +89,47 @@ def freeze_graph_test(pb_path, dialog):
         out = sess.run([x_idx, scores, one_hot_prediction], feed_dict={text: dialog})
         print("x_idx:{}, out:{}, scores:{}".format(x_idx, out, scores))
 
+        
+def load_model_from_checkpoint(dialog):
+    model_dir = tfFLAGS.pretrain_dir
+    if not tf.train.get_checkpoint_state(model_dir):
+        raise ValueError("must supply pre-train model when you are testing !!!")
+
+    session_conf = tf.ConfigProto(
+        allow_soft_placement=tfFLAGS.allow_soft_placement,
+        log_device_placement=tfFLAGS.log_device_placement
+    )
+    with tf.Session(config=session_conf) as sess:
+        ckpt = tf.train.latest_checkpoint(checkpoint_dir=model_dir)
+        graph_from_meta = ckpt + ".meta"
+        saver = tf.train.import_meta_graph(graph_from_meta)
+        saver.restore(sess, tf.train.latest_checkpoint(model_dir))
+
+        graph = sess.graph
+        feed_dict = {
+            "sentence:0": dialog,
+        }
+
+        # # correct_num = graph.get_tensor_by_name('precision/correct_num:0')
+        # # pred_num = graph.get_tensor_by_name('precision/pred_num:0')
+        # one_hot_prediction = graph.get_tensor_by_name('output/one_hot_prediction:0')
+        #
+        # one_hot_prediction = sess.run(
+        #     [one_hot_prediction], feed_dict=feed_dict)
+        #
+        # # print(correct_num)
+        # # print(pred_num)
+        # print(one_hot_prediction)
+
+        x_idx = sess.graph.get_tensor_by_name('input/x_idx:0')
+        one_hot_prediction = sess.graph.get_tensor_by_name("output/one_hot_prediction:0")
+        scores = sess.graph.get_tensor_by_name('output/scores:0')
+
+        x_idx_out, scores_out, one_hot_prediction_out = \
+            sess.run([x_idx, scores, one_hot_prediction], feed_dict=feed_dict)
+        print("x_idx_out:{}, scores_out:{}, one_hot_prediction_out:{}"
+              .format(x_idx_out, scores_out, one_hot_prediction_out))
+        
 
 if __name__ == '__main__':
     pb_path = 'model\\export'
