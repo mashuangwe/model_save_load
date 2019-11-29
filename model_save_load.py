@@ -1,8 +1,5 @@
 def model_export(self, sess, save_dir):
     """
-    模型导出 for tf-serving
-    不限于这一种方法
-
     def train():
         ...
         with tf.Session() as sess:
@@ -131,6 +128,49 @@ def load_model_from_checkpoint(dialog):
               .format(x_idx_out, scores_out, one_hot_prediction_out))
         
 
+def ckpt_to_pb(ckpt_dir, pb_dir):
+    logging.info("===============================")
+    logging.info(tfFLAGS.flags_into_string())
+    logging.info("===============================")
+    dictionary = Dictionary(tfFLAGS.label_file,
+                            tfFLAGS.vocab_file,
+                            tfFLAGS.max_seq_len,
+                            tfFLAGS.fc_hidden_size1,
+                            tfFLAGS.fc_hidden_size2,
+                            tfFLAGS.threshold)
+
+    text_cnn_model = TextCNN(
+        dictionary,
+        embedding_size=tfFLAGS.embedding_dim,
+        filter_sizes=list(map(int, tfFLAGS.filter_sizes.split(","))),
+        num_filters=tfFLAGS.num_filters,
+        l2_reg_lambda=tfFLAGS.l2_reg_lambda,
+        dropout_keep_prob=tfFLAGS.dropout_keep_prob,
+        learning_rate=tfFLAGS.learning_rate,
+        warmup_steps=tfFLAGS.warmup_steps
+    )
+
+    if os.path.exists(pb_dir):
+        cmd = "rm -rf %s" % pb_dir
+        os.system(cmd)
+
+    session_conf = tf.ConfigProto(
+        allow_soft_placement=True,
+        log_device_placement=False)
+    sess = tf.Session(config=session_conf)
+    with sess.as_default():
+        text_cnn_model.load(sess, ckpt_dir)
+
+        with tf.device("/cpu:0"):
+            insert_vocab_op = text_cnn_model.symbol2index.insert(
+                keys=tf.constant(list(text_cnn_model.vocab.keys()), dtype=tf.string),
+                values=tf.constant(list(text_cnn_model.vocab.values()), dtype=tf.int64))
+            sess.run([insert_vocab_op])
+
+        logging.info('Saving pb model to %s!' % pb_dir)
+        text_cnn_model.model_export(sess, pb_dir)
+        
+        
 if __name__ == '__main__':
     pb_path = 'model\\export'
 
